@@ -43,9 +43,9 @@ torch.manual_seed(seed)
 class Policy(nn.Module):
     def __init__(self):
         super(Policy, self).__init__()
-        self.affine1 = nn.Linear(4, 64)
+        self.affine1 = nn.Linear(4, 128)
         self.dropout = nn.Dropout(p=0.5)
-        self.affine2 = nn.Linear(64, 2)
+        self.affine2 = nn.Linear(128, 2)
 
         self.saved_log_probs = [] # Used to save the action decisions at each interval
         self.rewards = [] # Used to save rewards at each interval
@@ -173,7 +173,7 @@ for iEp in range(nEps):
     epReward = 0
 
     # Learning during the iEp'th episode
-    for t in range(1, 10000):  # Don't infinite loop while learning
+    for t in range(1, 5000):  # Don't infinite loop while learning
 
         # Get action from the policy network and interact with env to get new state, step reward, and done signal
         # Also add reward to policy ledger and total episode reward
@@ -194,12 +194,17 @@ plt.show()
 # Render 1 Episode #
 ####################
 
-env = gym.make('CartPole-v1', render_mode='rgb_array')
+print('\nRendering 1 Trained Run')
 
+env = gym.make('CartPole-v1', render_mode='human')
 state, _ = env.reset()
 epReward = 0
 
-for t in range(1, 10000):  # Don't infinite loop while learning
+for t in range(1, 1000):  # Don't infinite loop while learning
+
+    #env_screen = env.render()
+    #plt.imshow(env_screen)
+    env.render()
 
     # Get action from the policy network and interact with env to get new state, step reward, and done signal
     # Also add reward to policy ledger and total episode reward
@@ -209,5 +214,7 @@ for t in range(1, 10000):  # Don't infinite loop while learning
 
     if done:
         break
+
+print('Render Ran for {} Steps'.format(epReward))
 
 env.close()
