@@ -6,11 +6,13 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Categorical
 
+import matplotlib.pyplot as plt
+
 ###############
 # User Inputs #
 ###############
 
-gamma = 0.99  # Reward discount factor for each future step (lower value means more focus on shorter-term rewards)
+gamma = 0.98  # Reward discount factor for each future step (lower value means more focus on shorter-term rewards)
 seed = 543  # Random seed
 render = False  # Render the environment
 logInterval = 10  # Interval between training status logs
@@ -41,9 +43,9 @@ torch.manual_seed(seed)
 class Policy(nn.Module):
     def __init__(self):
         super(Policy, self).__init__()
-        self.affine1 = nn.Linear(4, 128)
-        self.dropout = nn.Dropout(p=0.6)
-        self.affine2 = nn.Linear(128, 2)
+        self.affine1 = nn.Linear(4, 64)
+        self.dropout = nn.Dropout(p=0.5)
+        self.affine2 = nn.Linear(64, 2)
 
         self.saved_log_probs = [] # Used to save the action decisions at each interval
         self.rewards = [] # Used to save rewards at each interval
@@ -56,8 +58,8 @@ class Policy(nn.Module):
         return F.softmax(action_scores, dim=1)
 
 # Instantiate the network and define the network optimizer
-policy = Policy()
-optimizer = optim.Adam(policy.parameters(), lr=1e-2)
+nnPolicy = Policy()
+optimizer = optim.Adam(nnPolicy.parameters(), lr=1e-2)
 
 # Epsilon is the machine error term
 eps = np.finfo(np.float32).eps.item()
@@ -73,14 +75,14 @@ def select_action(state):
     state = torch.from_numpy(state).float().unsqueeze(0)
 
     # output = model(input)
-    probs = policy(state)
+    probs = nnPolicy(state)
 
     # Get outputs as categorical probabilities and sample from it to get the action
     m = Categorical(probs=probs)
     action = m.sample()
 
     # Append the decided action log probability to the policy ledger
-    policy.saved_log_probs.append(m.log_prob(action))
+    nnPolicy.saved_log_probs.append(m.log_prob(action))
 
     return action.item()
 
@@ -97,14 +99,14 @@ def finish_episode():
 
     # Gather the cumulative discounted rewards in reverse order (such that action 1 aligns with total reward)
     # The first action affects all subsequent rewards, the last action only affects the last reward
-    for reward in policy.rewards[::-1]:
+    for reward in nnPolicy.rewards[::-1]:
         R = reward + gamma * R
         cumulRewards.insert(0, R)
     cumulRewards = torch.tensor(cumulRewards)
     cumulRewards = (cumulRewards - cumulRewards.mean()) / (cumulRewards.std() + eps)
 
     # Loss for each step is log_prob times the cumulative reward
-    for log_prob, cumulReward in zip(policy.saved_log_probs, cumulRewards):
+    for log_prob, cumulReward in zip(nnPolicy.saved_log_probs, cumulRewards):
         policy_loss.append(-log_prob * cumulReward)
 
     # Sum all of the losses for the episode together and step the policy network optimizer
@@ -115,14 +117,14 @@ def finish_episode():
     optimizer.step()
 
     # Clear out policy rewards and log probabilities
-    del policy.rewards[:]
-    del policy.saved_log_probs[:]
+    del nnPolicy.rewards[:]
+    del nnPolicy.saved_log_probs[:]
 
 ###################
 # Run RL Training #
 ###################
 
-# Initialize the total running reward across episodes used to compare against environment win threshol
+# Initialize the total running reward across episodes used to compare against environment win threshold
 runningReward = 10
 
 # Run for a maximum of 200 training episodes
@@ -139,7 +141,7 @@ for iEp in range(0, 500):
         # Also add reward to policy ledger and total episode reward
         action = select_action(state)
         state, reward, done, _, _ = env.step(action)
-        policy.rewards.append(reward)
+        nnPolicy.rewards.append(reward)
         epReward += reward
 
         if done: break
@@ -157,6 +159,55 @@ for iEp in range(0, 500):
     # Check for if simulation passes the reward threshold
     if runningReward > env.spec.reward_threshold:
         print("Solved! Running reward is now {} and the last episode runs to {} time steps!".format(runningReward, t))
+        break
+
+#####################
+# Run Trained Model #
+#####################
+
+nEps = 100
+print('\nRunning Trained Model for {} Episodes'.format(nEps))
+
+for iEp in range(nEps):
+    state, _ = env.reset()
+    epReward = 0
+
+    # Learning during the iEp'th episode
+    for t in range(1, 10000):  # Don't infinite loop while learning
+
+        # Get action from the policy network and interact with env to get new state, step reward, and done signal
+        # Also add reward to policy ledger and total episode reward
+        action = select_action(state)
+        state, reward, done, _, _ = env.step(action)
+        epReward += reward
+
+        if done:
+            break
+
+    nnPolicy.rewards.append(epReward)
+
+print('Average Reward over {} Trials: {}'.format(nEps, sum(nnPolicy.rewards) / len(nnPolicy.rewards)))
+plt.plot(list(range(100)), nnPolicy.rewards)
+plt.show()
+
+####################
+# Render 1 Episode #
+####################
+
+env = gym.make('CartPole-v1', render_mode='rgb_array')
+
+state, _ = env.reset()
+epReward = 0
+
+for t in range(1, 10000):  # Don't infinite loop while learning
+
+    # Get action from the policy network and interact with env to get new state, step reward, and done signal
+    # Also add reward to policy ledger and total episode reward
+    action = select_action(state)
+    state, reward, done, _, _ = env.step(action)
+    epReward += reward
+
+    if done:
         break
 
 env.close()
