@@ -1,3 +1,6 @@
+# REINFORCE is a Monte Carlo Policy Gradient method.
+# The implementation here uses a neural net to learn state-action function, rather than a Q table
+
 import gym
 import numpy as np
 import torch
@@ -23,6 +26,8 @@ logInterval = 10  # Interval between training status logs
 
 # CartPole is trying to solve the inverted pendulum problem
 # 4 inputs (cart position, cart veloc, pole angle, and pole ang veloc) and 2 outputs (push cart left, push cart right)
+# 4 inputs (cart position, cart
+# veloc, pole angle, and pole ang veloc) and 2 outputs (push cart left, push cart right)
 # The reward is +1 for every iteration through the environment (state->action->results) that the pole is kept upright
 # Certain conditions (e.g. cart going too far) will terminate the session
 # This if loop is a hack, original code had "if render: env.render()" in main training loop, but if render_mode=human,
